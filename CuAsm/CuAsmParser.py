@@ -778,6 +778,26 @@ class CuAsmParser(object):
 
         self.__updateSymtab()
 
+    def listKernels(self):
+        """Return kernel names assembled by the most recent parse()."""
+        return [k[6:] for k in self.__mSectionDict if k.startswith('.text.')]
+
+    def getKernelBytes(self, kernel_name):
+        """Return assembled instruction bytes for a kernel after parse().
+
+        Bypasses saveAsCubin() — use this when the ELF writer is not
+        compatible with the target arch (e.g. SM_120 / Blackwell).
+        Pair with CuAsm.utils.CubinSplicer to inject into a valid template.
+        """
+        sec_name = '.text.' + kernel_name
+        if sec_name not in self.__mSectionDict:
+            available = self.listKernels()
+            raise KeyError(
+                f'No text section for kernel "{kernel_name}". '
+                f'Available kernels: {available}'
+            )
+        return self.__mSectionDict[sec_name].getData()
+
     @CuAsmLogger.logTimeIt
     def saveAsCubin(self, fstream):
         if isinstance(fstream, str):

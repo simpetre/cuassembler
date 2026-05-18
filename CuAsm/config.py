@@ -11,7 +11,7 @@ def getDefaultStruct(st):
 class Config(object):
 
     # Default path to nvdisasm
-    NVDISASM_PATH = 'nvdisasm'
+    NVDISASM_PATH = '/usr/local/lib/python3.12/site-packages/triton/backends/nvidia/bin/nvdisasm'
 
     # Currently only little_endian and ELF64 is supported
     # NOTE: There are quite a lot of hardcodes for endianness and elfclass
