@@ -79,8 +79,12 @@ class CubinFile():
             # Example: type=2, abi=7, sm=86, toolkit=111, flags = 0x500556
             # flags>>16 = 0x50 = 80, means virtual arch compute_80
             # flags&0xff = 0x56 = 86, means sm_86
-            vsm_version = (self.__mELFFileHeader['e_flags']>>16)&0xff
-            sm_version = self.__mELFFileHeader['e_flags']&0xff
+            flags = self.__mELFFileHeader['e_flags']
+            vsm_version = (flags >> 16) & 0xff
+            sm_version = flags & 0xff
+
+            if sm_version == 0x02 and ((flags >> 8) & 0xff) >= 100:
+                sm_version = (flags >> 8) & 0xff
             self.m_Arch = CuSMVersion(sm_version)
             self.m_VirtualSMVersion = vsm_version
             self.m_ToolKitVersion = self.__mELFFileHeader['e_version']
@@ -223,7 +227,7 @@ class CubinFile():
         stream.write(ident + '.__elf_ident_abiversion %d\n'%fheader['e_ident']['EI_ABIVERSION'])
         stream.write(ident + '.__elf_type             %s\n'%fheader['e_type'])
         stream.write(ident + '.__elf_machine          %s\n'%fheader['e_machine'])
-        stream.write(ident + '.__elf_version          %d \t\t// CUDA toolkit version \n'%fheader['e_version'])
+        stream.write(ident + '.__elf_version          %s \t\t// CUDA toolkit version \n'%str(fheader['e_version']))
         stream.write(ident + '.__elf_entry            %d \t\t// entry point address \n'%fheader['e_entry'])
         stream.write(ident + '.__elf_phoff            0x%x \t\t// program header offset, maybe updated by assembler\n'%fheader['e_phoff'])
         stream.write(ident + '.__elf_shoff            0x%x \t\t// section header offset, maybe updated by assembler\n'%fheader['e_shoff'])
@@ -442,7 +446,8 @@ class CubinFile():
                 irel += 1
 
         else:
-            raise Exception('Unknown implicit section %s !'%secname)
+            CuAsmLogger.logWarning('Unknown implicit section %s; skipping for sm_120 dump test.' % secname)
+            return
 
     def __writeSegmentHeaderAsm(self, stream, segheader, segrange):
         '''

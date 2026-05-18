@@ -636,7 +636,7 @@ class CuInsFeeder():
         elif smversion.getMajor() in {5,6}:
             self.__CurrTM = self.__TMs['5x6x']
             self.__SplitCodeList = self.__SplitCodeList_5x6x
-        elif smversion.getMajor() in {7,8}:
+        elif smversion.getMajor() in {7,8,12}:
             self.__CurrTM = self.__TMs['7x8x']
             self.__SplitCodeList = self.__SplitCodeList_7x8x
         else:

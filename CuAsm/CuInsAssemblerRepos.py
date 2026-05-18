@@ -65,7 +65,7 @@ class CuInsAssemblerRepos():
                 if os.path.isfile(aname):
                     CuAsmLogger.logWarning(f'No default InsAsmRepos for SM_{vnum} found! Use SM_{anum} instead...')
                     self.initFromFile(aname)
-                    self.convertArch(anum)
+                    self.convertArch(vnum)
                     return
             
             CuAsmLogger.logError(f'No default or alias InsAsmRepos for SM_{vnum} found! Use empty repos ...')

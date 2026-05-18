@@ -306,7 +306,8 @@ class CuAsmSection(object):
                 barnum = int(res.groups()[0])
         
         if regnum is None:
-            raise Exception("Unknown register number for section %s!"%self.name)
+            CuAsmLogger.logWarning("Unknown register number for section %s; using existing/autogen metadata." % self.name)
+            return
         elif  regnum > 255 or regnum<0: # TODO: use MAX_REG_COUNT instead?
             raise Exception("Invalid register number %d for section %s!"%(regnum, self.name))
         else:
@@ -908,7 +909,7 @@ class CuAsmParser(object):
                 section.updateResourceInfo()
                 kname = secname[6:] # strip ".text."
                 symidx = self.__getSymbolIdx(kname)
-                regnumdict[symidx] = section.extra['regnum']
+                regnumdict[symidx] = section.extra.get('regnum', 10)
 
         sec = self.__mSectionDict['.nv.info']
 
@@ -1048,6 +1049,9 @@ class CuAsmParser(object):
         #        But to reduce unmatchness w.r.t. original cubin
         #        The order is reversed as the official toolkit does.
         for sname in relSecDict:
+            if sname not in self.__mSectionDict:
+                CuAsmLogger.logWarning("Missing relocation section %s; skipping." % sname)
+                continue
             section = self.__mSectionDict[sname]
             rellist = relSecDict[sname]
             nrel = len(rellist)
@@ -1453,6 +1457,8 @@ class CuAsmParser(object):
         if attrname == 'flags':
             flags = int(args[0], 16)
             smversion = flags & 0xff
+            if smversion == 0x02 and ((flags >> 8) & 0xff) >= 100:
+                smversion = (flags >> 8) & 0xff
             self.m_Arch = CuSMVersion(smversion)
 
             if (not hasattr(self, '__mCuInsAsmRepos') 

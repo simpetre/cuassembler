@@ -30,18 +30,19 @@ class CuSMVersion(object):
                                      60, 61, 62, 
                                      70, 72, 75, 
                                      80, 86, 87, 89, 
-                                     90])
+                                     90, 120])
 
     # Some versions do not have pre-gathered InsAsmRepos, but since the encoding may be almost identical
     # we may just copy the InsAsmRepos from another version     
-    InsAsmReposAliasDict = {62:61, 72:75, 87:86}
+    InsAsmReposAliasDict = {62:61, 72:75, 87:86, 120:86}
 
     SMCodeNameDict = { 35:'Kepler',  37:'Kepler',
                        50:'Maxwell', 52:'Maxwell', 53:'Maxwell',
                        60:'Pascal',  61:'Pascal',  62:'Pascal',
                        70:'Volta',   72:'Turing',  75:'Turing',
                        80:'Ampere',  86:'Ampere',  87:'Ampere',
-                       89:'Adalovelace', 90:'Hopper'}
+                       89:'Adalovelace', 90:'Hopper',
+                       120:'Blackwell'}
 
     PadBytes_5x_6x  = bytes.fromhex('e00700fc00801f00 000f07000000b050 000f07000000b050 000f07000000b050')
     Pad_CCode_5x_6x = 0x7e0               # [----:B------:R-:W-:Y:S00]
