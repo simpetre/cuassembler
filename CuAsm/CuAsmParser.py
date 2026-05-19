@@ -1025,7 +1025,7 @@ class CuAsmParser(object):
         # They are informational; the binary encoding comes from the bracketed
         # control code and the mnemonic+operands. Strip them so the assembler
         # sees only the instruction proper.
-        p_annot = re.compile(r"\s*(?:&(?:wr|req)=\S+|\?\w+)")
+        p_annot = re.compile(r"\s*(?:&[A-Za-z_]\w*=\S+|\?\w+)")
 
         ins_idx = 0
         for lineidx in range(line_start, line_end):
