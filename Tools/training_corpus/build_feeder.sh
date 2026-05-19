@@ -32,32 +32,50 @@ ok_count=0
 # Find all .cu files in deterministic (family-ordered) order
 mapfile -t CU_FILES < <(find "${CORPUS_DIR}" -name '*.cu' | sort)
 
+# Compile each file at multiple opt levels so the same source produces
+# different SASS (e.g. -O3 fuses to FFMA where -O0 keeps separate FMUL+FADD).
+# Each opt-level variant adds to the feeder, growing both shape coverage
+# (different mnemonics) and operand-value variation (different reg allocs).
+OPT_LEVELS=("-O3" "-O0 -G")
+
 for cu in "${CU_FILES[@]}"; do
     rel="${cu#${CORPUS_DIR}/}"
     stem="${rel%.cu}"
-    cubin="${BUILD_DIR}/${stem//\//_}.cubin"
-    sass="${BUILD_DIR}/${stem//\//_}.sass.txt"
-    mkdir -p "$(dirname "${cubin}")"
+    flat="${stem//\//_}"
+    mkdir -p "${BUILD_DIR}"
 
-    if ! "${NVCC}" -arch="${ARCH}" -cubin -std=c++17 -o "${cubin}" "${cu}" 2> "${cubin}.log"; then
-        echo "  SKIP  ${rel}  (nvcc failed — see ${cubin}.log)"
+    file_ok=0
+    for opt in "${OPT_LEVELS[@]}"; do
+        opt_tag="${opt// /}"
+        cubin="${BUILD_DIR}/${flat}${opt_tag}.cubin"
+        sass="${BUILD_DIR}/${flat}${opt_tag}.sass.txt"
+        log="${cubin}.log"
+
+        # shellcheck disable=SC2086
+        if ! "${NVCC}" -arch="${ARCH}" -cubin -std=c++17 ${opt} -o "${cubin}" "${cu}" 2> "${log}"; then
+            continue
+        fi
+
+        # cuobjdump --dump-sass emits the `.headerflags @"EF_CUDA_SMxxx ..."`
+        # line the feeder uses to detect arch (raw nvdisasm doesn't). Each
+        # instruction comes with its 128-bit encoding split across two
+        # `/* 0x... */` comments. Strip the sm_120 dataflow hints (&wr=,
+        # &req=, &rd=, ?transN, ?WAIT*_END_GROUP) so the parser sees a clean
+        # instruction string.
+        "${CUOBJDUMP}" --dump-sass "${cubin}" 2>/dev/null \
+            | sed -E 's/[[:space:]]*&[A-Za-z_][A-Za-z_0-9]*=[^[:space:]]+//g;
+                      s/[[:space:]]*\?[A-Za-z_0-9]+//g' \
+            >> "${OUT}"
+        file_ok=1
+    done
+
+    if [[ "${file_ok}" -eq 1 ]]; then
+        echo "  OK    ${rel}"
+        ok_count=$((ok_count + 1))
+    else
+        echo "  SKIP  ${rel}  (all opt levels failed)"
         fail_count=$((fail_count + 1))
-        continue
     fi
-
-    # cuobjdump --dump-sass emits the `.headerflags @"EF_CUDA_SMxxx ..."`
-    # line the feeder uses to detect arch (raw nvdisasm doesn't). Each
-    # instruction comes with its 128-bit encoding split across two
-    # `/* 0x... */` comments. Strip the sm_120 dataflow hints (&wr=, &req=,
-    # ?transN, ?WAIT*_END_GROUP) so the parser sees a clean instruction.
-    "${CUOBJDUMP}" --dump-sass "${cubin}" 2>/dev/null \
-        | sed -E 's/[[:space:]]*&[A-Za-z_][A-Za-z_0-9]*=[^[:space:]]+//g;
-                  s/[[:space:]]*\?[A-Za-z_0-9]+//g' \
-        > "${sass}"
-
-    cat "${sass}" >> "${OUT}"
-    echo "  OK    ${rel}"
-    ok_count=$((ok_count + 1))
 done
 
 echo
