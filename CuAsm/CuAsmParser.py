@@ -660,6 +660,7 @@ class CuAsmParser(object):
             '.short'             : self.__dir_short,                 # emit shorts
             '.word'              : self.__dir_word,                  # emit word (4B?)
             '.dword'             : self.__dir_dword,                 # emit dword (8B?)
+            '.string'            : self.__dir_string,                # emit null-terminated string
             '.type'              : self.__dir_type,                  # set symbol type
             '.size'              : self.__dir_size,                  # set symbol size
             '.global'            : self.__dir_global,                # declare a global symbol
@@ -1019,6 +1020,13 @@ class CuAsmParser(object):
 
         p_textline = re.compile(r'\[([\w:-]+)\](.*)')
 
+        # nvdisasm on sm_120+ decorates each instruction with dataflow hints:
+        #   &wr=0xN      &req={...}     ?transN     ?WAITn_END_GROUP
+        # They are informational; the binary encoding comes from the bracketed
+        # control code and the mnemonic+operands. Strip them so the assembler
+        # sees only the instruction proper.
+        p_annot = re.compile(r"\s*(?:&(?:wr|req)=\S+|\?\w+)")
+
         ins_idx = 0
         for lineidx in range(line_start, line_end):
             line = self.__mLines[lineidx]
@@ -1034,7 +1042,7 @@ class CuAsmParser(object):
                 self.__assert(False, 'Unrecognized code text!')
             
             ccode_s = res.groups()[0]
-            icode_s = res.groups()[1]
+            icode_s = p_annot.sub("", res.groups()[1])
 
             if c_ControlCodesPattern.match(ccode_s) is None:
                 self.__assert(False, f'Illegal control code text "{ccode_s}"!')
@@ -1413,6 +1421,54 @@ class CuAsmParser(object):
         self.__assertArgc('.dword', args, 1, allowMore=True)
         self.__emitTypedBytes('dword', args)
 
+    def __dir_string(self, args):
+        '''Emit one or more null-terminated strings (GNU as `.string`).
+
+        Each arg is a double-quoted literal (e.g. `"ptxas"`, `""`). nvdisasm
+        emits these inside note sections (e.g. `.note.nv.tkinfo`) to record
+        toolkit metadata. We decode standard backslash escapes; arbitrary
+        bytes can also be expressed via `\\xNN`.
+
+        The parser's generic comma-split (`re.split(r'\\s*,\\s*', ...)`) is
+        not quote-aware, so a string containing a comma (e.g.
+        `"Cuda compilation tools, release 13.0"`) arrives here as multiple
+        fragments. We reassemble by tracking unescaped-quote parity.
+        '''
+        self.__assertArgc('.string', args, 1, allowMore=True)
+
+        # Reassemble fragments that the comma-splitter sliced through quoted strings.
+        merged = []
+        buf = None
+        for a in args:
+            if buf is None:
+                buf = a
+            else:
+                buf = buf + ', ' + a
+            # Count unescaped double-quotes
+            n = 0
+            i = 0
+            while i < len(buf):
+                if buf[i] == '\\' and i + 1 < len(buf):
+                    i += 2
+                    continue
+                if buf[i] == '"':
+                    n += 1
+                i += 1
+            if n % 2 == 0:
+                merged.append(buf.strip())
+                buf = None
+        self.__assert(buf is None, f'.string: unterminated quoted literal in {args!r}')
+
+        for s in merged:
+            self.__assert(
+                len(s) >= 2 and s[0] == '"' and s[-1] == '"',
+                f'.string arg must be a double-quoted literal, got {s!r}'
+            )
+            inner = s[1:-1]
+            # decode \n \t \\ \" \xNN  — sufficient for nvdisasm-emitted strings
+            decoded = bytes(inner, 'utf-8').decode('unicode_escape').encode('latin-1')
+            self.__emitBytes(decoded + b'\x00')
+
     def __dir_align(self, args):
         ''' .align directive may have different operations, depending on the context.
 
@@ -1461,14 +1517,27 @@ class CuAsmParser(object):
         self.__mSymbolDict[symbol].type = stype
 
     def __dir_size(self, args):
-        self.__assertArgc('.size', args, 2, allowMore=False)
+        '''.size sets a symbol's size. Two forms emitted by nvdisasm:
+
+            .size <symbol>, <size-expr>            # classic 2-arg
+            .size <symbol>, <value>, <size>        # 3-arg, used by CUDA 13+
+                                                   #   for shared-mem aliases
+        '''
+        self.__assert(
+            len(args) in (2, 3),
+            f'.size requires 2 or 3 args; got {len(args)}: {args}.'
+        )
         symbol = args[0]
         if symbol not in self.__mSymbolDict:
             self.__mSymbolDict[symbol] = CuAsmSymbol(symbol)
 
-        # NOTE: the size of a symbol is probably an expression
-        #       this will be evaluted when generating symbol tables
-        self.__mSymbolDict[symbol].size = args[1]
+        if len(args) == 2:
+            # NOTE: the size of a symbol is probably an expression
+            #       this will be evaluted when generating symbol tables
+            self.__mSymbolDict[symbol].size = args[1]
+        else:
+            self.__mSymbolDict[symbol].value = args[1]
+            self.__mSymbolDict[symbol].size = args[2]
 
     def __dir_global(self, args):
         '''.global defines a global symbol.
