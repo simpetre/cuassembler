@@ -799,7 +799,21 @@ class CuAsmParser(object):
         return self.__mSectionDict[sec_name].getData()
 
     @CuAsmLogger.logTimeIt
-    def saveAsCubin(self, fstream):
+    def saveAsCubin(self, fstream, template_cubin=None):
+        """Write the assembled kernel(s) as a cubin.
+
+        Two write paths:
+          * Default (`template_cubin=None`): the original from-scratch ELF
+            writer. Works on older arches but is structurally broken on
+            sm_120 / Blackwell.
+          * Splice (`template_cubin` set to a path or bytes): inject the
+            assembled `.text.<kernel>` bytes into a working `nvcc -arch=sm_X
+            -cubin` template, inheriting format correctness from nvcc. The
+            preferred path for sm_120+; works for any arch nvcc can produce.
+
+        When using `template_cubin`, the parser must have produced exactly
+        one kernel (`listKernels()`).
+        """
         if isinstance(fstream, str):
             fout = open(fstream, 'wb')
             needClose = True
@@ -808,6 +822,55 @@ class CuAsmParser(object):
             fout = fstream
             needClose = False
             CuAsmLogger.logEntry('Saving as cubin file to stream...')
+
+        if template_cubin is not None:
+            from CuAsm.utils.CubinSplicer import splice_kernel_into_cubin
+
+            if isinstance(template_cubin, (str, bytes, bytearray)):
+                if isinstance(template_cubin, str):
+                    template_bytes = open(template_cubin, 'rb').read()
+                else:
+                    template_bytes = bytes(template_cubin)
+            else:
+                raise TypeError(
+                    f"template_cubin must be a path or bytes, got {type(template_cubin)}"
+                )
+
+            kernels = self.listKernels()
+            if len(kernels) != 1:
+                raise ValueError(
+                    f"saveAsCubin(template_cubin=...) requires exactly one kernel, "
+                    f"got {len(kernels)}: {kernels}"
+                )
+            kname = kernels[0]
+
+            # Collect num_regs and exit_offsets from the parsed section.
+            section = self.__mSectionDict['.text.' + kname]
+            num_regs = section.extra.get('regnum', 10)
+
+            # Decode the in-memory .nv.info.{kernel} to lift exit offsets.
+            # CuNVInfo's arch arg only affects auto-gen attribute filtering for
+            # writes; for our read-only decode it doesn't matter.
+            from CuAsm.CuNVInfo import CuNVInfo
+            info_sec = self.__mSectionDict.get('.nv.info.' + kname)
+            exit_offsets = []
+            if info_sec is not None:
+                for attr, val in CuNVInfo(info_sec.getData(), arch='sm_75'):
+                    if attr == 'EIATTR_EXIT_INSTR_OFFSETS':
+                        exit_offsets = list(val)
+                        break
+
+            spliced = splice_kernel_into_cubin(
+                template_bytes,
+                kernel_name=kname,
+                kernel_bytes=self.getKernelBytes(kname),
+                num_regs=num_regs,
+                exit_offsets=exit_offsets,
+            )
+            fout.write(spliced)
+            if needClose:
+                fout.close()
+            return
 
         disppos = lambda s: CuAsmLogger.logSubroutine("%#08x(%08d) : %s"%(fout.tell(), fout.tell(), s))
         # write ELF file header
