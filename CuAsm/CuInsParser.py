@@ -602,7 +602,34 @@ class CuInsParser():
         elif self.m_InsOp in c_AddrFuncs: # Functions that use address of current instruction
                                           # CHECK: what if the address is not the last operand?
             if self.m_InsKey.endswith('_II'):
-                if 'ABS' not in self.m_InsOpFull: # CHECK: Other absolute address?
+                is_abs = 'ABS' in self.m_InsOpFull   # CHECK: Other absolute address?
+
+                if self.m_Arch.getMajor() >= 10:
+                    # Blackwell (sm_100/sm_120): the relative branch target is
+                    # encoded as (byte_offset >> 4) in a SPLIT, sign-extended
+                    # field -- the low 6 bits and the high 48 bits land in
+                    # non-contiguous code bits ([18:23] and [34:81]).
+                    # CuInsAssembler models each operand with a single integral
+                    # weight, which can represent one contiguous field but neither
+                    # the /16 scale nor the split (the scale alone makes the linear
+                    # solve non-integral). So feed the offset as two non-negative
+                    # field values and let the solver learn the bit position
+                    # (weight) of each piece. addr is 16-byte aligned, so the
+                    # arithmetic >>4 is exact for negative offsets too.
+                    #
+                    # ABS variants (CALL.ABS/RET.ABS, target 0x0 + relocation)
+                    # share the same `*_II` InsKey, so they must keep the same
+                    # 2-value shape; split them identically (their relative-offset
+                    # computation is skipped, value stays the absolute target).
+                    if is_abs:
+                        off = self.m_InsVals[-1]
+                    else:
+                        off = (self.m_InsVals[-1] - self.m_InsAddr
+                               - self.m_Arch.getInstructionLength()) >> 4
+                    self.m_InsVals[-1] = off & 0x3f
+                    self.m_InsVals.append((off >> 6) & 0xFFFFFFFFFFFF)
+                    self.m_InsTags.append('I.BranchOffsetHi')
+                elif not is_abs:
                     addr = self.m_InsVals[-1] - self.m_InsAddr - self.m_Arch.getInstructionLength()
                     if addr<0:
                         self.m_InsModifier.append('0_NegAddrOffset')

@@ -25,16 +25,18 @@ class CuSMVersion(object):
 
     __InstanceRepos = {}
 
-    SMVersionDict = makeVersionDict([35, 37, 
-                                     50, 52, 53, 
-                                     60, 61, 62, 
-                                     70, 72, 75, 
-                                     80, 86, 87, 89, 
-                                     90, 120])
+    SMVersionDict = makeVersionDict([35, 37,
+                                     50, 52, 53,
+                                     60, 61, 62,
+                                     70, 72, 75,
+                                     80, 86, 87, 89,
+                                     90, 100, 120])
 
     # Some versions do not have pre-gathered InsAsmRepos, but since the encoding may be almost identical
-    # we may just copy the InsAsmRepos from another version     
-    InsAsmReposAliasDict = {62:61, 72:75, 87:86, 120:86}
+    # we may just copy the InsAsmRepos from another version
+    # sm_100 (Blackwell datacenter, B100/B200) bootstraps from sm_120 (Blackwell
+    # consumer) until its own DefaultInsAsmRepos.sm_100.txt is built.
+    InsAsmReposAliasDict = {62:61, 72:75, 87:86, 100:120, 120:86}
 
     SMCodeNameDict = { 35:'Kepler',  37:'Kepler',
                        50:'Maxwell', 52:'Maxwell', 53:'Maxwell',
@@ -42,7 +44,7 @@ class CuSMVersion(object):
                        70:'Volta',   72:'Turing',  75:'Turing',
                        80:'Ampere',  86:'Ampere',  87:'Ampere',
                        89:'Adalovelace', 90:'Hopper',
-                       120:'Blackwell'}
+                       100:'Blackwell', 120:'Blackwell'}
 
     PadBytes_5x_6x  = bytes.fromhex('e00700fc00801f00 000f07000000b050 000f07000000b050 000f07000000b050')
     Pad_CCode_5x_6x = 0x7e0               # [----:B------:R-:W-:Y:S00]
