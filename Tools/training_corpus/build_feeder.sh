@@ -18,8 +18,10 @@ OUT="${2:-./feed.txt}"
 NVCC="${NVCC:-nvcc}"
 CUOBJDUMP="${CUOBJDUMP:-cuobjdump}"
 # cuobjdump shells out to nvdisasm internally; make sure it can find it.
-NVDISASM_PATH="${NVDISASM_PATH:-/usr/local/lib/python3.12/site-packages/triton/backends/nvidia/bin}"
-export PATH="${NVDISASM_PATH}:${PATH}"
+# Default to the CUDA toolkit's bin (where nvcc lives); override with NVDISASM_DIR.
+_NVCC_BIN="$(dirname "$(command -v "${NVCC}" 2>/dev/null || echo /usr/local/cuda/bin/nvcc)")"
+NVDISASM_DIR="${NVDISASM_DIR:-${_NVCC_BIN}}"
+export PATH="${NVDISASM_DIR}:${PATH}"
 
 CORPUS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${CORPUS_DIR}/_build_${ARCH}"

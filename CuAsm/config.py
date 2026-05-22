@@ -2,16 +2,40 @@
 
 from elftools.elf.structs import ELFStructs
 import os
+import shutil
 
 # TODO: log system
 
 def getDefaultStruct(st):
     return st.parse(b'\x00'*st.sizeof())
 
+
+def _resolve_nvdisasm():
+    """Locate nvdisasm portably instead of hardcoding one install's path.
+
+    Order: explicit NVDISASM_PATH env -> nvdisasm on PATH -> CUDA_HOME/CUDA_PATH
+    bin -> common /usr/local/cuda location. Falls back to the bare name so the
+    error (if any) surfaces at call time rather than import time.
+    """
+    env = os.environ.get('NVDISASM_PATH')
+    if env and os.path.isfile(env):
+        return env
+    found = shutil.which('nvdisasm')
+    if found:
+        return found
+    for root in (os.environ.get('CUDA_HOME'), os.environ.get('CUDA_PATH'),
+                 '/usr/local/cuda'):
+        if root:
+            cand = os.path.join(root, 'bin', 'nvdisasm')
+            if os.path.isfile(cand):
+                return cand
+    return 'nvdisasm'
+
+
 class Config(object):
 
-    # Default path to nvdisasm
-    NVDISASM_PATH = '/usr/local/lib/python3.12/site-packages/triton/backends/nvidia/bin/nvdisasm'
+    # Path to nvdisasm — resolved from env/PATH/CUDA_HOME (see _resolve_nvdisasm).
+    NVDISASM_PATH = _resolve_nvdisasm()
 
     # Currently only little_endian and ELF64 is supported
     # NOTE: There are quite a lot of hardcodes for endianness and elfclass

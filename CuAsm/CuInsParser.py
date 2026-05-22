@@ -20,7 +20,7 @@ p_SBSet = re.compile(r'\{(\d,)*\d\}')
 #    Bugfix: reuse will be treated as normal modifier
 # 3) RZ may also appear in FADD/FMUL/FFMA.RZ ...
 # 4) UPT is not found, may be just PT?
-p_ConstTrDict = {r'(?<!\.)\bRZ\b' : 'R255', r'\bURZ\b' : 'UR63',
+p_ConstTrDict = {r'(?<!\.)\bRZ\b' : 'R255', r'\bURZ\b' : 'UR255',
                 r'\bPT\b' : 'P7', r'\bUPT\b' : 'UP7', r'\bQNAN\b' : 'NAN'} #, r'\.reuse\b':''
 
 # Pattern for striping modifiers from an operand

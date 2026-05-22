@@ -117,6 +117,7 @@ def splice_kernel_into_cubin(
     text_idx = None
     info_sec = None
     info_idx = None
+    ginfo_sec = None          # the global `.nv.info` (holds EIATTR_REGCOUNT)
     symtab = None
     symtab_idx = None
     text_section_count = 0
@@ -128,6 +129,8 @@ def splice_kernel_into_cubin(
                 text_sec, text_idx = sec, idx
         elif sec.name == info_name:
             info_sec, info_idx = sec, idx
+        elif sec.name == ".nv.info":
+            ginfo_sec = sec
         elif sec.name == ".symtab":
             symtab, symtab_idx = sec, idx
 
@@ -188,6 +191,31 @@ def splice_kernel_into_cubin(
         new_attrs.append((_OFFSET_ATTR_HANDLED, list(exit_offsets)))
     nvinfo.m_AttrList = new_attrs
     new_info_bytes = nvinfo.serialize()
+
+    # ----- Patch EIATTR_REGCOUNT in the global `.nv.info` ----- #
+    # The SM honors EIATTR_REGCOUNT for register allocation; the nvcc template
+    # was built from an empty kernel (REGCOUNT≈4), so without this every spliced
+    # kernel that uses a register past ~R12 gets an out-of-range fault at launch.
+    # The value is [kernel_sym_idx, count]; we keep the symbol and set the count.
+    # Same byte-size, so it's an in-place overwrite that doesn't shift offsets.
+    patched_ginfo_bytes = None
+    ginfo_off = None
+    if ginfo_sec is not None:
+        ginfo = CuNVInfo(bytes(ginfo_sec.data()), arch=arch)
+        changed = False
+        for i, (attr_name, val) in enumerate(ginfo.m_AttrList):
+            if attr_name == 'EIATTR_REGCOUNT' and isinstance(val, list) and len(val) == 2:
+                ginfo.m_AttrList[i] = (attr_name, [val[0], num_regs])
+                changed = True
+        if changed:
+            cand = ginfo.serialize()
+            if len(cand) != ginfo_sec.header["sh_size"]:
+                raise CubinSpliceError(
+                    "patching EIATTR_REGCOUNT changed `.nv.info` size "
+                    f"({ginfo_sec.header['sh_size']} -> {len(cand)}); refusing to corrupt layout"
+                )
+            patched_ginfo_bytes = cand
+            ginfo_off = ginfo_sec.header["sh_offset"]
 
     # ----- Compute edits, sorted by file offset ----- #
     text_off = text_sec.header["sh_offset"]
@@ -313,5 +341,12 @@ def splice_kernel_into_cubin(
     # ----- Patch ELF header's e_shoff / e_phoff ----- #
     _put_u64(result, _E_SHOFF, new_e_shoff)
     _put_u64(result, _E_PHOFF, new_e_phoff)
+
+    # ----- Overwrite global `.nv.info` with the REGCOUNT-patched bytes ----- #
+    # Same size, so its content merely shifted with the surrounding edits; write
+    # the patched bytes at its shifted file offset.
+    if patched_ginfo_bytes is not None:
+        at = ginfo_off + delta_at(ginfo_off)
+        result[at:at + len(patched_ginfo_bytes)] = patched_ginfo_bytes
 
     return bytes(result)
