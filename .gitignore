@@ -7,6 +7,9 @@ __pycache__/
 # (compiled probe cubins + intermediate .sass dumps; the *sources* under
 # 0x_*/ and the solved repos in CuAsm/InsAsmRepos/ are NOT ignored).
 Tools/training_corpus/_build_*/
+# Concatenated nvcc-disassembly feed — regenerable intermediate (the solved
+# repos in CuAsm/InsAsmRepos/ are the committed product, not this).
+Tools/training_corpus/feed.*.txt
 
 # OS / editor cruft
 .DS_Store
