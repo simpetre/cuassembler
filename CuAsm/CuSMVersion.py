@@ -33,10 +33,11 @@ class CuSMVersion(object):
                                      90, 100, 120])
 
     # Some versions do not have pre-gathered InsAsmRepos, but since the encoding may be almost identical
-    # we may just copy the InsAsmRepos from another version
-    # sm_100 (Blackwell datacenter, B100/B200) bootstraps from sm_120 (Blackwell
-    # consumer) until its own DefaultInsAsmRepos.sm_100.txt is built.
-    InsAsmReposAliasDict = {62:61, 72:75, 87:86, 100:120, 120:86}
+    # we may just copy the InsAsmRepos from another version.
+    # sm_100 (Blackwell datacenter, B100/B200) now has its own
+    # DefaultInsAsmRepos.sm_100.txt (built from the sm_100 ptxas corpus), so it no
+    # longer bootstraps from sm_120 — the loader uses sm_100's repo directly.
+    InsAsmReposAliasDict = {62:61, 72:75, 87:86, 120:86}
 
     SMCodeNameDict = { 35:'Kepler',  37:'Kepler',
                        50:'Maxwell', 52:'Maxwell', 53:'Maxwell',

@@ -83,7 +83,11 @@ class CubinFile():
             vsm_version = (flags >> 16) & 0xff
             sm_version = flags & 0xff
 
-            if sm_version == 0x02 and ((flags >> 8) & 0xff) >= 100:
+            # Blackwell+ (sm_100/sm_120) put the real arch in byte 1; the low byte is a
+            # sub-variant that differs by producer (nvcc=0x02, Triton/ptxas=0x0a, ...), so
+            # key off byte 1 >= 100 rather than a specific low byte. Pre-Blackwell cubins
+            # have byte 1 < 100, so this leaves them on the byte-0 path.
+            if ((flags >> 8) & 0xff) >= 100:
                 sm_version = (flags >> 8) & 0xff
             self.m_Arch = CuSMVersion(sm_version)
             self.m_VirtualSMVersion = vsm_version

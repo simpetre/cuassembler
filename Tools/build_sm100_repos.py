@@ -12,14 +12,14 @@ empty repo (the previous behavior of this script).
 
 Examples:
     # Bootstrap from a curated training corpus, growing whatever is already there:
-    python Tools/build_sm120_repos.py feed.txt --arch sm_120
+    python Tools/build_sm100_repos.py feed.sm100.txt --arch sm_100
 
     # Start fresh:
-    python Tools/build_sm120_repos.py feed.txt --arch sm_120 --clean
+    python Tools/build_sm100_repos.py feed.sm100.txt --arch sm_100 --clean
 
     # Single-shot extension from one cubin's disassembly (e.g. resolving a gap
     # surfaced by an agent failure):
-    python Tools/build_sm120_repos.py gap_fix.txt --arch sm_120
+    python Tools/build_sm100_repos.py gap_fix.txt --arch sm_100
 """
 
 import argparse
